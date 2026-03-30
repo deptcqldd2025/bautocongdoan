@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bảng Điều Khiển Ban Bầu Cử - v1.1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-slate-50 font-sans">
+
+<div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-900 text-white p-6 hidden md:block">
+        <h2 class="text-xl font-bold mb-8">Admin Panel</h2>
+        <nav class="space-y-4">
+            <a href="#" class="block py-2 px-4 bg-blue-600 rounded">Thống kê kết quả</a>
+            <a href="#" class="block py-2 px-4 hover:bg-slate-700 rounded text-slate-400">Danh sách cử tri</a>
+            <a href="index.html" class="block py-2 px-4 hover:bg-red-700 rounded text-slate-400 mt-20">Thoát hệ thống</a>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8">
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-800">Kết Quả Bầu Cử Công Đoàn</h1>
+                <p class="text-slate-500">Phiên bản: 1.1 | Cập nhật: <span id="last-update">--:--</span></p>
+            </div>
+            <div id="admin-status" class="bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-medium border border-green-200">
+                Đang trực tuyến: <span id="admin-email">Đang xác thực...</span>
+            </div>
+        </header>
+
+        <!-- Thẻ tóm tắt -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <p class="text-slate-500 text-sm uppercase font-bold">Tổng số phiếu</p>
+                <h3 id="total-votes" class="text-4xl font-black text-blue-600">0</h3>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <p class="text-slate-500 text-sm uppercase font-bold">Tỷ lệ tham gia</p>
+                <h3 id="participation-rate" class="text-4xl font-black text-orange-500">0%</h3>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <p class="text-slate-500 text-sm uppercase font-bold">Trạng thái</p>
+                <h3 class="text-4xl font-black text-green-600 italic uppercase">Đang mở</h3>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Biểu đồ -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h3 class="text-lg font-bold mb-4">Biểu đồ tỷ lệ phiếu bầu</h3>
+                <canvas id="voteChart" height="250"></canvas>
+            </div>
+
+            <!-- Danh sách chi tiết -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h3 class="text-lg font-bold mb-4">Nhật ký phiếu bầu mới nhất</h3>
+                <div class="overflow-y-auto max-h-80">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="border-b text-slate-400 text-sm">
+                                <th class="pb-2">Email / CCCD</th>
+                                <th class="pb-2">Thời gian</th>
+                                <th class="pb-2">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vote-log-body" class="text-sm">
+                            <!-- Dữ liệu từ Firebase -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    // 1. Cấu hình Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyCzWjfcD5Dgq7V-i2izb9tKLR6QM6qWPQo",
+        authDomain: "tavietnam-78ae8.firebaseapp.com",
+        projectId: "tavietnam-78ae8",
+        storageBucket: "tavietnam-78ae8.firebasestorage.app",
+        messagingSenderId: "670121705534",
+        appId: "1:670121705534:web:1027ad98550573ad37116f"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // 2. Kiểm tra quyền truy cập (Giả lập danh sách admin được phép)
+    const allowedAdmins = ['admin@congdoan.com', 'to-bau-cu@gmail.com']; 
+    // Trong thực tế bạn nên lưu email này vào Firestore hoặc dùng Firebase Auth Role
+    const promptAdmin = prompt("Vui lòng nhập Email xác thực quyền Admin:");
+
+    if (!allowedAdmins.includes(promptAdmin)) {
+        alert("Bạn không có quyền truy cập trang này!");
+        window.location.href = "index.html";
+    } else {
+        document.getElementById('admin-email').innerText = promptAdmin;
+        initDashboard();
+    }
+
+    let chart;
+
+    function initDashboard() {
+        // Lắng nghe thay đổi dữ liệu thời gian thực (Real-time)
+        db.collection("votes").orderBy("timestamp", "desc").onSnapshot((snapshot) => {
+            let totalVotes = snapshot.size;
+            document.getElementById('total-votes').innerText = totalVotes;
+            document.getElementById('last-update').innerText = new Date().toLocaleTimeString();
+            
+            let voteCounts = {};
+            let logHtml = '';
+
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                
+                // Đếm số phiếu cho từng UCV
+                data.selections.forEach(candidateID => {
+                    voteCounts[candidateID] = (voteCounts[candidateID] || 0) + 1;
+                });
+
+                // Tạo dòng nhật ký
+                const timeStr = data.timestamp ? data.timestamp.toDate().toLocaleString() : 'Đang xử lý...';
+                logHtml += `
+                    <tr class="border-b hover:bg-slate-50">
+                        <td class="py-3 font-medium">${data.voter_email}<br><span class="text-xs text-slate-400">${data.voter_cccd}</span></td>
+                        <td class="py-3 text-slate-500">${timeStr}</td>
+                        <td class="py-3 text-blue-600 font-bold uppercase text-xs cursor-pointer">Xem chi tiết</td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('vote-log-body').innerHTML = logHtml;
+            updateChart(voteCounts);
+        });
+    }
+
+    function updateChart(counts) {
+        const labels = Object.keys(counts);
+        const dataValues = Object.values(counts);
+
+        if (chart) {
+            chart.destroy();
+        }
+
+        const ctx = document.getElementById('voteChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Số phiếu bầu',
+                    data: dataValues,
+                    backgroundColor: ['#3b82f6', '#f59e0b', '#10b981', '#ef4444'],
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    }
+</script>
+
+</body>
+</html>
