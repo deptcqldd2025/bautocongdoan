@@ -3,181 +3,158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Bầu Cử Công Đoàn Online - v1.0</title>
+    <title>Bầu Cử Công Đoàn - v2.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <!-- Firebase SDK -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <style>
-        .candidate-card.selected { border: 3px solid #2563eb; background-color: #eff6ff; }
+        .candidate-card.selected { border: 3px solid #2563eb; background-color: #eff6ff; transform: scale(1.02); }
         .hidden-section { display: none; }
     </style>
 </head>
-<body class="bg-gray-100 font-sans">
+<body class="bg-gray-50">
 
-<div class="max-w-4xl mx-auto my-10 p-6 bg-white shadow-lg rounded-lg">
-    <header class="text-center mb-8">
-        <h1 class="text-2xl font-bold text-blue-700 uppercase">Bầu cử Tổ trưởng, Tổ phó Công đoàn</h1>
-        <p class="text-gray-600">Phiên bản: 1.0 | Ngày: 31/03/2026</p>
-    </header>
+<div class="max-w-3xl mx-auto my-8 p-6 bg-white shadow-xl rounded-xl border-t-4 border-blue-600">
+    <div class="text-center mb-8">
+        <h1 class="text-2xl font-bold text-gray-800 uppercase">Hệ Thống Bầu Cử Online</h1>
+        <p class="text-blue-600 font-medium">Tổ trưởng, Tổ phó Công đoàn</p>
+        <p class="text-xs text-gray-400 mt-1">Version 2.0 | Project: bautocongdoan</p>
+    </div>
 
-    <!-- Bước 1: Đăng nhập -->
+    <!-- Đăng nhập -->
     <section id="login-section" class="space-y-4">
-        <h2 class="text-xl font-semibold border-b pb-2">Xác thực Đoàn viên</h2>
-        <div>
-            <label class="block mb-1">Số CCCD:</label>
-            <input type="text" id="user-cccd" class="w-full border p-2 rounded" placeholder="Nhập 12 số CCCD">
+        <div class="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 mb-4">
+            Vui lòng nhập chính xác số CCCD và Email để nhận mã xác thực OTP.
         </div>
-        <div>
-            <label class="block mb-1">Email đang dùng:</label>
-            <input type="email" id="user-email" class="w-full border p-2 rounded" placeholder="email@vi-du.com">
-        </div>
-        <button onclick="sendOTP()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Gửi mã OTP qua Email</button>
+        <input type="text" id="user-cccd" class="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Số CCCD (12 số)">
+        <input type="email" id="user-email" class="w-full border p-3 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" placeholder="Email nhận OTP">
+        <button onclick="sendOTP()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition">GỬI MÃ XÁC THỰC</button>
         
-        <div id="otp-input-area" class="hidden-section mt-4 pt-4 border-t">
-            <label class="block mb-1 text-red-600 font-bold">Nhập mã OTP:</label>
-            <input type="text" id="otp-code" class="w-full border p-2 rounded mb-2" placeholder="6 chữ số">
-            <button onclick="verifyLogin()" class="w-full bg-green-600 text-white py-2 rounded">Xác nhận Đăng nhập</button>
+        <div id="otp-input-area" class="hidden-section mt-6 p-4 border-t border-dashed">
+            <label class="block mb-2 font-bold text-red-600">Mã OTP từ Email:</label>
+            <div class="flex gap-2">
+                <input type="text" id="otp-code" class="flex-1 border p-3 rounded-lg text-center tracking-widest font-bold" placeholder="******">
+                <button onclick="verifyLogin()" class="bg-green-600 text-white px-6 rounded-lg font-bold">XÁC NHẬN</button>
+            </div>
         </div>
     </section>
 
-    <!-- Bước 2: Trang Bầu cử -->
+    <!-- Trang chọn ứng cử viên -->
     <section id="voting-section" class="hidden-section">
-        <div class="bg-yellow-50 p-3 mb-4 rounded border border-yellow-200">
-            <p class="text-sm">Chào đoàn viên: <strong id="display-email"></strong></p>
-            <p class="text-sm font-bold text-red-600">Lưu ý: Chỉ được chọn tối đa <span id="max-votes">2</span> ứng cử viên.</p>
+        <div class="flex justify-between items-center mb-6 bg-gray-100 p-3 rounded">
+            <span class="text-sm font-medium" id="display-info"></span>
+            <span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Tối đa 2 người</span>
         </div>
 
-        <div id="candidate-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <!-- Ứng cử viên mẫu -->
-            <div class="candidate-card border p-4 rounded cursor-pointer transition" onclick="toggleSelection(this, 'UCV01')">
-                <img src="https://via.placeholder.com/100" class="w-20 h-20 rounded-full mx-auto mb-2" alt="Avatar">
+        <div id="candidate-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+            <!-- Ứng cử viên 1 -->
+            <div class="candidate-card border-2 p-4 rounded-xl cursor-pointer hover:border-blue-300 transition" onclick="toggleSelection(this, 'Nguyễn Văn A')">
+                <div class="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-3 flex items-center justify-center text-gray-400">IMG</div>
                 <div class="text-center">
-                    <h3 class="font-bold">Nguyễn Văn A</h3>
-                    <p class="text-sm text-gray-600">Chức vụ: Kỹ thuật viên</p>
-                    <p class="text-sm text-gray-500 italic">Đơn vị: Tổ Sản xuất 1</p>
+                    <h3 class="font-bold text-lg">Nguyễn Văn A</h3>
+                    <p class="text-sm text-gray-600">Tổ trưởng đương nhiệm</p>
+                    <p class="text-xs text-gray-500 italic">Đơn vị: Kỹ thuật</p>
                 </div>
             </div>
-            <div class="candidate-card border p-4 rounded cursor-pointer transition" onclick="toggleSelection(this, 'UCV02')">
-                <img src="https://via.placeholder.com/100" class="w-20 h-20 rounded-full mx-auto mb-2" alt="Avatar">
+            <!-- Ứng cử viên 2 -->
+            <div class="candidate-card border-2 p-4 rounded-xl cursor-pointer hover:border-blue-300 transition" onclick="toggleSelection(this, 'Trần Thị B')">
+                <div class="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-3 flex items-center justify-center text-gray-400">IMG</div>
                 <div class="text-center">
-                    <h3 class="font-bold">Trần Thị B</h3>
-                    <p class="text-sm text-gray-600">Chức vụ: Nhân viên VP</p>
-                    <p class="text-sm text-gray-500 italic">Đơn vị: Tổ Hành chính</p>
+                    <h3 class="font-bold text-lg">Trần Thị B</h3>
+                    <p class="text-sm text-gray-600">Đoàn viên xuất sắc</p>
+                    <p class="text-xs text-gray-500 italic">Đơn vị: Văn phòng</p>
                 </div>
             </div>
         </div>
 
-        <button onclick="submitVote()" class="w-full bg-blue-700 text-white py-3 rounded-lg font-bold text-lg hover:bg-blue-800">TÔI ĐỒNG Ý</button>
+        <button onclick="submitVote()" class="w-full bg-blue-800 text-white py-4 rounded-xl font-bold text-xl shadow-lg hover:bg-blue-900 transition">TÔI ĐỒNG Ý</button>
     </section>
 
-    <!-- Bước 3: Kết quả & Thông báo -->
+    <!-- Thành công -->
     <section id="result-section" class="hidden-section text-center py-10">
-        <div class="text-green-600 text-5xl mb-4">✔</div>
-        <h2 class="text-2xl font-bold mb-2">Bầu cử thành công!</h2>
-        <p class="mb-4">Kết quả đã được ghi nhận và gửi về email của bạn.</p>
-        <button onclick="downloadReceipt()" class="bg-gray-200 px-4 py-2 rounded">Tải biên lai PDF</button>
+        <div class="inline-block p-4 rounded-full bg-green-100 text-green-600 mb-4 text-3xl">✓</div>
+        <h2 class="text-2xl font-bold text-gray-800">Hoàn Thành Bầu Cử!</h2>
+        <p class="text-gray-500 mt-2 mb-6">Kết quả đã được ghi nhận vào hệ thống.</p>
+        <button onclick="downloadPDF()" class="border-2 border-blue-600 text-blue-600 px-6 py-2 rounded-lg font-bold hover:bg-blue-50">Tải Phiếu Xác Nhận (PDF)</button>
     </section>
 </div>
 
 <script>
-    // 1. Cấu hình Firebase (Lấy từ thông tin bạn đã cung cấp)
     const firebaseConfig = {
-        apiKey: "AIzaSyCzWjfcD5Dgq7V-i2izb9tKLR6QM6qWPQo",
-        authDomain: "tavietnam-78ae8.firebaseapp.com",
-        projectId: "tavietnam-78ae8",
-        storageBucket: "tavietnam-78ae8.firebasestorage.app",
-        messagingSenderId: "670121705534",
-        appId: "1:670121705534:web:1027ad98550573ad37116f"
+        apiKey: "AIzaSyAr6EyKjuaB7hdZZ63DwA9PhRajC5jyQ6w",
+        authDomain: "bautocongdoan.firebaseapp.com",
+        projectId: "bautocongdoan",
+        storageBucket: "bautocongdoan.firebasestorage.app",
+        messagingSenderId: "682887879775",
+        appId: "1:682887879775:web:f343d7ac969a82591a4fea",
+        measurementId: "G-WXXFDWQPZQ"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Biến điều khiển
-    let selectedCandidates = [];
-    const maxAllowed = 2; // Số người tối đa được bầu
-    let currentUser = { email: '', cccd: '' };
+    let selectedNames = [];
+    let userData = { email: '', cccd: '' };
 
-    // Giả lập gửi OTP (Trong thực tế cần kết hợp với Cloud Functions hoặc Email Service)
     function sendOTP() {
-        const email = document.getElementById('user-email').value;
         const cccd = document.getElementById('user-cccd').value;
-        if(!email || !cccd) return alert("Vui lòng nhập đủ thông tin!");
-
-        alert("Mã OTP (giả lập: 123456) đã được gửi đến: " + email);
+        const email = document.getElementById('user-email').value;
+        if(cccd.length < 12 || !email.includes('@')) return alert("Vui lòng nhập đúng CCCD và Email!");
+        
+        userData = { cccd, email };
+        alert("Hệ thống giả lập: Mã OTP là 2026. Thực tế sẽ gửi tới: " + email);
         document.getElementById('otp-input-area').classList.remove('hidden-section');
     }
 
     function verifyLogin() {
-        const otp = document.getElementById('otp-code').value;
-        if(otp === "123456") {
-            currentUser.email = document.getElementById('user-email').value;
-            currentUser.cccd = document.getElementById('user-cccd').value;
-            
+        const code = document.getElementById('otp-code').value;
+        if(code === "2026") {
             document.getElementById('login-section').classList.add('hidden-section');
             document.getElementById('voting-section').classList.remove('hidden-section');
-            document.getElementById('display-email').innerText = currentUser.email;
+            document.getElementById('display-info').innerText = "Cử tri: " + userData.email;
         } else {
-            alert("Mã OTP không chính xác!");
+            alert("Mã OTP sai!");
         }
     }
 
-    function toggleSelection(element, id) {
-        if (selectedCandidates.includes(id)) {
-            selectedCandidates = selectedCandidates.filter(item => item !== id);
-            element.classList.remove('selected');
+    function toggleSelection(el, name) {
+        if(selectedNames.includes(name)) {
+            selectedNames = selectedNames.filter(n => n !== name);
+            el.classList.remove('selected');
         } else {
-            if (selectedCandidates.length >= maxAllowed) {
-                alert(`Bạn chỉ được bầu tối đa ${maxAllowed} người!`);
-                return;
-            }
-            selectedCandidates.push(id);
-            element.classList.add('selected');
+            if(selectedNames.length >= 2) return alert("Chỉ được chọn tối đa 2 ứng cử viên!");
+            selectedNames.push(name);
+            el.classList.add('selected');
         }
     }
 
     async function submitVote() {
-        if (selectedCandidates.length === 0) return alert("Vui lòng chọn ít nhất 1 ứng cử viên!");
-
+        if(selectedNames.length === 0) return alert("Vui lòng chọn ứng cử viên!");
+        
         try {
-            // Lưu vào Firestore
             await db.collection("votes").add({
-                voter_email: currentUser.email,
-                voter_cccd: currentUser.cccd,
-                selections: selectedCandidates,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                voter_email: userData.email,
+                voter_cccd: userData.cccd,
+                candidates: selectedNames,
+                time: firebase.firestore.FieldValue.serverTimestamp()
             });
-
             document.getElementById('voting-section').classList.add('hidden-section');
             document.getElementById('result-section').classList.remove('hidden-section');
-            
-            // Ở đây bạn có thể gọi một API để gửi email thực tế
-            console.log("Gửi email tới:", currentUser.email, "và Ban Bầu Cử");
-            
-        } catch (error) {
-            console.error("Lỗi:", error);
-            alert("Có lỗi xảy ra khi gửi phiếu!");
+        } catch (e) {
+            alert("Lỗi kết nối database!");
         }
     }
 
-    function downloadReceipt() {
+    function downloadPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        
-        doc.setFontSize(16);
-        doc.text("BIEN LAI BAU CU ONLINE", 20, 20);
-        doc.setFontSize(12);
-        doc.text(`Email: ${currentUser.email}`, 20, 40);
-        doc.text(`CCCD: ${currentUser.cccd}`, 20, 50);
-        doc.text(`Danh sach bau chon: ${selectedCandidates.join(", ")}`, 20, 60);
-        doc.text(`Thoi gian: ${new Date().toLocaleString()}`, 20, 70);
-        
-        doc.save(`PhieuBau_${currentUser.cccd}.pdf`);
+        doc.text("PHIEU XAC NHAN BAU CU ONLINE", 20, 20);
+        doc.text(`Email: ${userData.email}`, 20, 40);
+        doc.text(`CCCD: ${userData.cccd}`, 20, 50);
+        doc.text(`Da bau cho: ${selectedNames.join(", ")}`, 20, 60);
+        doc.text(`Ngay gio: ${new Date().toLocaleString()}`, 20, 70);
+        doc.save("KetQuaBauCu.pdf");
     }
 </script>
-
 </body>
 </html>
